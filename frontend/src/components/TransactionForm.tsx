@@ -47,6 +47,15 @@ export function TransactionForm({ accounts, onSubmit }: Props) {
     const magnitude = Math.abs(cents);
     const signed = direction === "out" ? -magnitude : magnitude;
 
+    // A date input can be cleared, and new Date("") throws on toISOString.
+    // Midday is used rather than midnight so a timezone shift cannot move the
+    // transaction onto the previous day.
+    const timestamp = new Date(`${date}T12:00:00`);
+    if (Number.isNaN(timestamp.getTime())) {
+      setError("Pick a valid date.");
+      return;
+    }
+
     setBusy(true);
     try {
       await onSubmit({
@@ -54,8 +63,7 @@ export function TransactionForm({ accounts, onSubmit }: Props) {
         payee: payee.trim(),
         category: category.trim(),
         amount: signed,
-        // A date input gives a bare day; widen it to a timestamp the API accepts.
-        date: new Date(`${date}T12:00:00`).toISOString(),
+        date: timestamp.toISOString(),
         note: note.trim(),
       });
       setAmount("");
