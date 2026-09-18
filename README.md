@@ -160,14 +160,37 @@ Also not built yet:
 - Budgets, recurring transactions, and CSV or OFX import
 - Pagination on the transaction list
 
-## Note on the Go module path
+## Pushing to GitHub
 
 `backend/go.mod` declares `github.com/lamcheryl/finance_app/backend`, guessed
-from the local username. If your GitHub account differs, fix it before the first
-push:
+from the local username. Since that path appears in every import, the helper
+script rewrites it, sets the remote and pushes in one go:
 
 ```bash
-cd backend && go mod edit -module github.com/YOUR_USERNAME/finance_app/backend && grep -rl 'lamcheryl/finance_app' . | xargs sed -i '' 's|lamcheryl/finance_app|YOUR_USERNAME/finance_app|g'
+./scripts/push-to-github.sh YOUR_USERNAME
+```
+
+Pass `https` as a second argument to use an HTTPS remote instead of SSH. The
+script assumes you can already authenticate to GitHub — see below.
+
+### First-time authentication
+
+This machine has no SSH key, no stored GitHub credential, and no `gh` CLI.
+Pick one:
+
+**SSH key** (no extra tooling):
+
+```bash
+ssh-keygen -t ed25519 -C "your-email@example.com" && cat ~/.ssh/id_ed25519.pub
+```
+
+Add that public key at <https://github.com/settings/keys>, confirm with
+`ssh -T git@github.com`, then run the push script.
+
+**GitHub CLI** (also gives you `gh repo create`, `gh pr`):
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" && brew install gh && gh auth login
 ```
 
 ## License
