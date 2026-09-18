@@ -167,18 +167,48 @@ from the local username. Since that path appears in every import, the helper
 script rewrites it, sets the remote and pushes in one go:
 
 ```bash
-./scripts/push-to-github.sh YOUR_USERNAME
+./scripts/push-with-token.sh        # token auth; resolves your username for you
+./scripts/push-to-github.sh NAME   # SSH or an existing credential helper
 ```
 
-Pass `https` as a second argument to use an HTTPS remote instead of SSH. The
-script assumes you can already authenticate to GitHub — see below.
+Both need you to be able to authenticate to GitHub first — see below.
 
 ### First-time authentication
 
 This machine has no SSH key, no stored GitHub credential, and no `gh` CLI.
-Pick one:
+Pick one.
 
-**SSH key** (no extra tooling):
+### Option 1: a personal access token (no extra tooling)
+
+Fill in the token file, which lives outside the repo so it cannot be committed:
+
+```bash
+open -e ~/.config/finance_app/github.env
+```
+
+Then:
+
+```bash
+./scripts/push-with-token.sh
+```
+
+Add `--create` if the repository does not exist yet; it is created **private**
+unless you also pass `--public`.
+
+The script verifies the token, resolves your username from it, rewrites the Go
+module path to match, checks that the rewrite still builds, and pushes. The
+token is kept out of `argv` (curl reads the auth header from stdin), out of
+`.git/config` (a one-shot credential helper supplies it), and out of all script
+output.
+
+A fine-grained token needs **Contents: Read and write** on `finance_app` and
+nothing else. Creating a repository with `--create` requires a *classic* token
+with the `repo` scope, because fine-grained tokens cannot create repositories.
+
+When you are done, delete the file with `rm ~/.config/finance_app/github.env`
+and revoke the token at <https://github.com/settings/tokens>.
+
+### Option 2: an SSH key
 
 ```bash
 ssh-keygen -t ed25519 -C "your-email@example.com" && cat ~/.ssh/id_ed25519.pub
@@ -187,7 +217,9 @@ ssh-keygen -t ed25519 -C "your-email@example.com" && cat ~/.ssh/id_ed25519.pub
 Add that public key at <https://github.com/settings/keys>, confirm with
 `ssh -T git@github.com`, then run the push script.
 
-**GitHub CLI** (also gives you `gh repo create`, `gh pr`):
+### Option 3: the GitHub CLI
+
+Also gives you `gh repo create` and `gh pr`:
 
 ```bash
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" && brew install gh && gh auth login
