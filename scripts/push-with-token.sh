@@ -200,13 +200,16 @@ if [ -n "$(git status --porcelain)" ]; then
 	die "working tree has uncommitted changes; commit or stash before pushing"
 fi
 
-if [ "$owner" != "$OLD_OWNER" ]; then
+# go.mod is plain text and the sed pass below covers its module line too, so
+# this needs no `go mod edit` and therefore no Go toolchain. Driving off what
+# is actually in the tree rather than off the owner name keeps this
+# idempotent: a second run finds nothing to change and goes straight to the
+# push.
+files="$(git grep -l "github.com/${OLD_OWNER}/finance_app" || true)"
+
+if [ -n "$files" ] && [ "$owner" != "$OLD_OWNER" ]; then
 	echo "==> Rewriting Go module path: $OLD_OWNER -> $owner"
 
-	# go.mod is plain text and the sed pass below covers its module line too, so
-	# this does not need `go mod edit` and therefore does not need Go installed.
-	files="$(git grep -l "github.com/${OLD_OWNER}/finance_app" || true)"
-	[ -n "$files" ] || die "expected to find the old module path but git grep found nothing"
 	if sed --version >/dev/null 2>&1; then
 		printf '%s\n' "$files" | xargs sed -i "s|github.com/${OLD_OWNER}/finance_app|github.com/${owner}/${GITHUB_REPO}|g"
 	else
@@ -223,6 +226,8 @@ if [ "$owner" != "$OLD_OWNER" ]; then
 	git add -A
 	git commit -q -m "Set module path to github.com/${owner}/${GITHUB_REPO}"
 	echo "    committed"
+else
+	echo "==> Module path already points at github.com/${owner}/${GITHUB_REPO}"
 fi
 
 # --- 4. Push ------------------------------------------------------------------
