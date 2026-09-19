@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 
-	"github.com/lamcheryl/finance_app/backend/internal/store"
+	"github.com/infomcinspirations/finance_app/backend/internal/store"
 )
 
 // Handler holds the dependencies every route needs.

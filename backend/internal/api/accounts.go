@@ -3,8 +3,8 @@ package api
 import (
 	"net/http"
 
-	"github.com/lamcheryl/finance_app/backend/internal/model"
-	"github.com/lamcheryl/finance_app/backend/internal/store"
+	"github.com/infomcinspirations/finance_app/backend/internal/model"
+	"github.com/infomcinspirations/finance_app/backend/internal/store"
 )
 
 // accountRequest is the client-supplied half of an account. ID and CreatedAt are

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lamcheryl/finance_app/backend/internal/model"
+	"github.com/infomcinspirations/finance_app/backend/internal/model"
 )
 
 func newAccount(t *testing.T, m *Memory, name string, opening int64) model.Account {

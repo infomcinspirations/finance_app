@@ -1,3 +1,3 @@
-module github.com/lamcheryl/finance_app/backend
+module github.com/infomcinspirations/finance_app/backend
 
 go 1.22

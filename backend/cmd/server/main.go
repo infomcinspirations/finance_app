@@ -12,8 +12,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/lamcheryl/finance_app/backend/internal/api"
-	"github.com/lamcheryl/finance_app/backend/internal/store"
+	"github.com/infomcinspirations/finance_app/backend/internal/api"
+	"github.com/infomcinspirations/finance_app/backend/internal/store"
 )
 
 const shutdownTimeout = 10 * time.Second

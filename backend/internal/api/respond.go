@@ -9,8 +9,8 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/lamcheryl/finance_app/backend/internal/model"
-	"github.com/lamcheryl/finance_app/backend/internal/store"
+	"github.com/infomcinspirations/finance_app/backend/internal/model"
+	"github.com/infomcinspirations/finance_app/backend/internal/store"
 )
 
 // maxBodyBytes caps request bodies so a malformed or hostile client cannot make

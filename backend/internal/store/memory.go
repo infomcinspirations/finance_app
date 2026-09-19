@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lamcheryl/finance_app/backend/internal/model"
+	"github.com/infomcinspirations/finance_app/backend/internal/model"
 )
 
 // Memory is a goroutine-safe in-memory Store. It is the default for local

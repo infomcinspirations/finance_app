@@ -162,7 +162,7 @@ Also not built yet:
 
 ## Pushing to GitHub
 
-`backend/go.mod` declares `github.com/lamcheryl/finance_app/backend`, guessed
+`backend/go.mod` declares `github.com/infomcinspirations/finance_app/backend`, guessed
 from the local username. Since that path appears in every import, the helper
 script rewrites it, sets the remote and pushes in one go:
 

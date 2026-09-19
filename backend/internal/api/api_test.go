@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lamcheryl/finance_app/backend/internal/store"
+	"github.com/infomcinspirations/finance_app/backend/internal/store"
 )
 
 func newServer(t *testing.T) http.Handler {

@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/lamcheryl/finance_app/backend/internal/model"
-	"github.com/lamcheryl/finance_app/backend/internal/store"
+	"github.com/infomcinspirations/finance_app/backend/internal/model"
+	"github.com/infomcinspirations/finance_app/backend/internal/store"
 )
 
 // transactionRequest is the client-supplied half of a transaction.
