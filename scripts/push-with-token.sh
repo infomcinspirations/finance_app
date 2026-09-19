@@ -202,16 +202,15 @@ fi
 
 if [ "$owner" != "$OLD_OWNER" ]; then
 	echo "==> Rewriting Go module path: $OLD_OWNER -> $owner"
-	(cd backend && go mod edit -module "github.com/${owner}/${GITHUB_REPO}/backend") 2>/dev/null ||
-		die "could not run 'go mod edit'. Is Go installed and on PATH?"
 
+	# go.mod is plain text and the sed pass below covers its module line too, so
+	# this does not need `go mod edit` and therefore does not need Go installed.
 	files="$(git grep -l "github.com/${OLD_OWNER}/finance_app" || true)"
-	if [ -n "$files" ]; then
-		if sed --version >/dev/null 2>&1; then
-			printf '%s\n' "$files" | xargs sed -i "s|github.com/${OLD_OWNER}/finance_app|github.com/${owner}/${GITHUB_REPO}|g"
-		else
-			printf '%s\n' "$files" | xargs sed -i '' "s|github.com/${OLD_OWNER}/finance_app|github.com/${owner}/${GITHUB_REPO}|g"
-		fi
+	[ -n "$files" ] || die "expected to find the old module path but git grep found nothing"
+	if sed --version >/dev/null 2>&1; then
+		printf '%s\n' "$files" | xargs sed -i "s|github.com/${OLD_OWNER}/finance_app|github.com/${owner}/${GITHUB_REPO}|g"
+	else
+		printf '%s\n' "$files" | xargs sed -i '' "s|github.com/${OLD_OWNER}/finance_app|github.com/${owner}/${GITHUB_REPO}|g"
 	fi
 
 	if command -v go >/dev/null 2>&1; then
