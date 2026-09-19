@@ -4,7 +4,10 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
+	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -18,7 +21,29 @@ import (
 
 const shutdownTimeout = 10 * time.Second
 
+// version is overwritten at build time with -ldflags "-X main.version=...".
+var version = "dev"
+
 func main() {
+	// -health exists so a container image with no shell and no curl can still
+	// declare a HEALTHCHECK: the binary probes itself and exits 0 or 1.
+	healthProbe := flag.Bool("health", false, "probe the health endpoint and exit")
+	showVersion := flag.Bool("version", false, "print the version and exit")
+	flag.Parse()
+
+	if *showVersion {
+		fmt.Println(version)
+		return
+	}
+
+	if *healthProbe {
+		if err := probeHealth(env("ADDR", ":8080")); err != nil {
+			fmt.Fprintln(os.Stderr, "unhealthy:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: logLevel(env("LOG_LEVEL", "info")),
 	})))
@@ -43,7 +68,7 @@ func main() {
 
 	errCh := make(chan error, 1)
 	go func() {
-		slog.Info("server listening", "addr", addr, "corsAllowedOrigins", origins)
+		slog.Info("server listening", "addr", addr, "version", version, "corsAllowedOrigins", origins)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 			return
@@ -67,6 +92,33 @@ func main() {
 		}
 		slog.Info("shutdown complete")
 	}
+}
+
+// probeHealth requests the health endpoint of a server listening on addr.
+func probeHealth(addr string) error {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return fmt.Errorf("parse ADDR %q: %w", addr, err)
+	}
+	// A wildcard listen address is not dialable; talk to the loopback instead.
+	switch host {
+	case "", "0.0.0.0", "::", "[::]":
+		host = "127.0.0.1"
+	}
+
+	url := "http://" + net.JoinHostPort(host, port) + "/api/v1/health"
+	client := &http.Client{Timeout: 3 * time.Second}
+
+	resp, err := client.Get(url)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("%s returned %s", url, resp.Status)
+	}
+	return nil
 }
 
 func env(key, fallback string) string {

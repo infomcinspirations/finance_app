@@ -3,9 +3,10 @@
 A personal finance tracker: accounts, transactions, and period summaries.
 Go API, TypeScript frontend, no third-party Go dependencies.
 
-> **Status: scaffold.** The code has not been compiled or run — Go and Node were
-> not installed on the machine it was written on. Run `make setup && make test`
-> as your first step and expect to fix whatever it finds.
+> **Status: scaffold.** None of this has been compiled or run — Go, Node and
+> Docker were all absent from the machine it was written on, and there is no CI.
+> Your first step should be `make docker-test` (needs only Docker) or
+> `make setup && make test` (needs Go and Node). Expect to fix what it finds.
 
 ## Layout
 
@@ -15,13 +16,27 @@ backend/                 Go API (standard library only)
   internal/model/        domain types, normalization, validation
   internal/store/        Store interface + in-memory implementation
   internal/api/          routes, handlers, middleware
+  Dockerfile             multi-stage build -> distroless image
 frontend/                Vite + React + TypeScript
   src/api.ts             typed API client
   src/money.ts           cents parsing and formatting
   src/components/        forms, lists, summary panel
+  Dockerfile             multi-stage build -> nginx image
+  nginx.conf             static serving + /api proxy
+docker-compose.yml       runs both containers together
 ```
 
 ## Quick start
+
+With Docker, and nothing else installed:
+
+```bash
+docker compose up --build
+```
+
+Then open <http://localhost:8080>. See [Docker](#docker) for details.
+
+### Or run it locally
 
 Needs Go 1.22+ and Node 20+.
 
@@ -118,6 +133,61 @@ No exchange rates are applied anywhere. When accounts span more than one
 currency, `/summary` sets `mixedCurrency: true` and the UI omits cross-currency
 totals rather than showing a number that adds euros to dollars.
 
+## Docker
+
+Running the stack needs **only Docker** — no local Go or Node, since both
+toolchains live in the build stages:
+
+```bash
+docker compose up --build
+```
+
+Then open <http://localhost:8080>. Set `WEB_PORT` in a `.env` file to use a
+different host port.
+
+### Running the tests without installing anything
+
+```bash
+make docker-test
+```
+
+That runs `go vet` and the Go suite in the backend's `test` stage, and the
+frontend's `tsc --noEmit` as part of its build stage. It is the quickest way to
+find out whether this scaffold actually compiles.
+
+### How the two images are built
+
+**Backend** — `golang:1.22-alpine` compiles a static binary
+(`CGO_ENABLED=0`, `-trimpath`, symbols stripped), which is copied into
+`gcr.io/distroless/static-debian12:nonroot`. The runtime image has no shell, no
+package manager and no libc, and runs as a non-root user. Because there is no
+shell or `curl` to health-check with, the binary probes itself:
+
+```bash
+docker run --rm finance-app-backend -version
+```
+
+**Frontend** — `node:20-alpine` runs `npm run build`, which is
+`tsc --noEmit && vite build`, so a type error fails the image build rather than
+shipping a broken bundle. The resulting `dist/` is served by `nginx:1.27-alpine`.
+
+### Networking
+
+The browser only ever talks to the frontend container. nginx serves the bundle
+and proxies `/api` to `backend:8080` over Compose's internal network, which
+means requests are same-origin and **CORS never applies in the Docker setup**.
+The backend publishes no host port; uncomment the `ports:` line under `backend`
+in `docker-compose.yml` if you want to reach the API directly.
+
+The frontend waits on the backend's health check before it starts, so the first
+page load cannot hit a proxy error.
+
+### A note on the data
+
+The store is in memory and the containers have no volumes, so **everything is
+lost when the stack stops**. That is not an oversight to fix with a volume — it
+needs a real database behind `store.Store`. See [Known gaps](#known-gaps).
+
 ## Configuration
 
 Backend, via environment variables:
@@ -133,6 +203,10 @@ personal financial data.
 
 Frontend: copy `frontend/.env.example` to `frontend/.env` to point the dev proxy
 somewhere other than `localhost:8080`.
+
+Docker Compose: copy `.env.example` to `.env` in the repo root. It reads
+`WEB_PORT` (host port, default 8080), `LOG_LEVEL`, and `VERSION` (stamped into
+the binary and reported by `-version`).
 
 ## Testing
 

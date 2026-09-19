@@ -1,0 +1,56 @@
+# Runs the whole app with `docker compose up`. The browser only ever talks to
+# the frontend container; nginx proxies /api to the backend over the internal
+# network, so requests are same-origin and CORS never comes into play.
+#
+# The top-level `version:` key is deliberately absent — it has been obsolete
+# since Compose v2 and current versions warn about it.
+
+name: finance-app
+
+services:
+  backend:
+    build:
+      context: ./backend
+      target: runtime
+      args:
+        VERSION: ${VERSION:-dev}
+    environment:
+      ADDR: ":8080"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    # No `ports:` on purpose. The API is reached through the frontend proxy, so
+    # it is not published to the host. Uncomment to poke at it directly:
+    #   ports: ["8080:8080"]
+    expose:
+      - "8080"
+    restart: unless-stopped
+    healthcheck:
+      # The image has no shell, so the binary probes itself.
+      test: ["CMD", "/server", "-health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 3s
+    # A static binary running as nonroot needs no capabilities and writes
+    # nothing to disk.
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  frontend:
+    build:
+      context: ./frontend
+      target: runtime
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      backend:
+        # Wait for the API to answer before serving, so the first page load does
+        # not hit a proxy error.
+        condition: service_healthy
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    # Capabilities are left alone here: nginx needs NET_BIND_SERVICE to bind 80
+    # and SETUID/SETGID to drop its workers to the nginx user.

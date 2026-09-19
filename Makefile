@@ -1,4 +1,5 @@
-.PHONY: help setup dev-backend dev-frontend test test-backend test-frontend build fmt vet check clean
+.PHONY: help setup dev-backend dev-frontend test test-backend test-frontend build fmt vet check clean \
+	docker-build docker-test docker-up docker-down docker-logs docker-clean
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[1m%-16s\033[0m %s\n", $$1, $$2}'
@@ -35,3 +36,26 @@ check: fmt vet test ## Format, vet and test
 
 clean: ## Remove build output
 	rm -rf backend/bin frontend/dist
+
+## --- Docker ------------------------------------------------------------------
+## These need no local Go or Node: the toolchains live in the build stages.
+
+docker-build: ## Build both images
+	docker compose build
+
+docker-test: ## Run the Go suite and the frontend type-check inside Docker
+	docker build --target test ./backend
+	docker build --target build ./frontend
+
+docker-up: ## Start the stack, then open http://localhost:8080
+	docker compose up --build -d
+	@echo "finance_app is on http://localhost:$${WEB_PORT:-8080}"
+
+docker-down: ## Stop the stack
+	docker compose down
+
+docker-logs: ## Follow logs from both containers
+	docker compose logs -f
+
+docker-clean: ## Stop the stack and remove its images and volumes
+	docker compose down --rmi local --volumes --remove-orphans
