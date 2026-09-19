@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>finance_app — API only</title>
+    <style>
+      body {
+        margin: 0;
+        display: grid;
+        place-items: center;
+        min-height: 100vh;
+        font: 15px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        color: #1a1d23;
+        background: #f6f7f9;
+      }
+      main { max-width: 34rem; padding: 2rem; }
+      h1 { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1.3rem; }
+      code {
+        padding: 0.1em 0.35em;
+        font-size: 0.9em;
+        background: #e7eaee;
+        border-radius: 4px;
+      }
+      @media (prefers-color-scheme: dark) {
+        body { color: #e8eaed; background: #14161a; }
+        code { background: #2c313a; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>finance_app</h1>
+      <p>
+        This binary was built without the frontend, so only the API is being
+        served. The endpoints under <code>/api/v1</code> work normally — try
+        <code>/api/v1/health</code>.
+      </p>
+      <p>
+        This page is a placeholder that exists so <code>go build</code> succeeds
+        in a bare checkout. To get the real interface, either build the Docker
+        image, which compiles the frontend and embeds it, or run
+        <code>npm run dev</code> in <code>frontend/</code> and use the Vite dev
+        server on port 5173.
+      </p>
+    </main>
+  </body>
+</html>

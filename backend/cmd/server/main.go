@@ -17,6 +17,7 @@ import (
 
 	"github.com/infomcinspirations/finance_app/backend/internal/api"
 	"github.com/infomcinspirations/finance_app/backend/internal/store"
+	"github.com/infomcinspirations/finance_app/backend/internal/web"
 )
 
 const shutdownTimeout = 10 * time.Second
@@ -51,9 +52,17 @@ func main() {
 	addr := env("ADDR", ":8080")
 	origins := splitAndTrim(env("CORS_ALLOWED_ORIGINS", "http://localhost:5173"))
 
+	// The frontend is compiled into the binary, so one process serves both the
+	// API and the app.
+	frontend, err := web.Handler()
+	if err != nil {
+		slog.Error("load embedded frontend", "error", err)
+		os.Exit(1)
+	}
+
 	srv := &http.Server{
 		Addr:    addr,
-		Handler: api.New(store.NewMemory(), origins),
+		Handler: api.New(store.NewMemory(), origins, frontend),
 		// Timeouts are set explicitly: net/http's zero values mean "wait
 		// forever", which lets a slow client hold a connection open.
 		ReadHeaderTimeout: 5 * time.Second,

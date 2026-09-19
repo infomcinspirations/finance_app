@@ -1,5 +1,5 @@
 .PHONY: help setup dev-backend dev-frontend test test-backend test-frontend build fmt vet check clean \
-	docker-build docker-test docker-up docker-down docker-logs docker-clean
+	docker-build docker-test docker-run docker-version
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[1m%-16s\033[0m %s\n", $$1, $$2}'
@@ -38,24 +38,24 @@ clean: ## Remove build output
 	rm -rf backend/bin frontend/dist
 
 ## --- Docker ------------------------------------------------------------------
-## These need no local Go or Node: the toolchains live in the build stages.
+## One image holds the whole app. These need no local Go or Node: both
+## toolchains live in the build stages.
 
-docker-build: ## Build both images
-	docker compose build
+IMAGE ?= finance_app
+VERSION ?= dev
+PORT ?= 8080
 
-docker-test: ## Run the Go suite and the frontend type-check inside Docker
-	docker build --target test ./backend
-	docker build --target build ./frontend
+docker-build: ## Build the image
+	docker build --build-arg VERSION=$(VERSION) -t $(IMAGE):$(VERSION) .
 
-docker-up: ## Start the stack, then open http://localhost:8080
-	docker compose up --build -d
-	@echo "finance_app is on http://localhost:$${WEB_PORT:-8080}"
+docker-test: ## Run go vet, the Go suite and the frontend type-check inside Docker
+	docker build --target test .
 
-docker-down: ## Stop the stack
-	docker compose down
+docker-run: docker-build ## Build, then serve on http://localhost:$(PORT)
+	@echo "finance_app on http://localhost:$(PORT)"
+	docker run --rm -p $(PORT):8080 \
+		--read-only --cap-drop ALL --security-opt no-new-privileges \
+		$(IMAGE):$(VERSION)
 
-docker-logs: ## Follow logs from both containers
-	docker compose logs -f
-
-docker-clean: ## Stop the stack and remove its images and volumes
-	docker compose down --rmi local --volumes --remove-orphans
+docker-version: docker-build ## Print the version stamped into the image
+	docker run --rm $(IMAGE):$(VERSION) -version

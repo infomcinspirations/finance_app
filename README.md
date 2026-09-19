@@ -16,14 +16,12 @@ backend/                 Go API (standard library only)
   internal/model/        domain types, normalization, validation
   internal/store/        Store interface + in-memory implementation
   internal/api/          routes, handlers, middleware
-  Dockerfile             multi-stage build -> distroless image
+  internal/web/          embeds and serves the built frontend
 frontend/                Vite + React + TypeScript
   src/api.ts             typed API client
   src/money.ts           cents parsing and formatting
   src/components/        forms, lists, summary panel
-  Dockerfile             multi-stage build -> nginx image
-  nginx.conf             static serving + /api proxy
-docker-compose.yml       runs both containers together
+Dockerfile               builds both halves into one static binary
 ```
 
 ## Quick start
@@ -31,7 +29,7 @@ docker-compose.yml       runs both containers together
 With Docker, and nothing else installed:
 
 ```bash
-docker compose up --build
+make docker-run
 ```
 
 Then open <http://localhost:8080>. See [Docker](#docker) for details.
@@ -135,15 +133,26 @@ totals rather than showing a number that adds euros to dollars.
 
 ## Docker
 
-Running the stack needs **only Docker** — no local Go or Node, since both
-toolchains live in the build stages:
+The whole application ships as **one image running one process**. The frontend is
+compiled to static files, embedded into the Go binary, and served by it — so
+there is no nginx, no second container and no Compose file.
 
 ```bash
-docker compose up --build
+make docker-run
 ```
 
-Then open <http://localhost:8080>. Set `WEB_PORT` in a `.env` file to use a
-different host port.
+That builds the image and serves it on <http://localhost:8080>. Override the host
+port with `make docker-run PORT=3000`.
+
+Or by hand:
+
+```bash
+docker build -t finance_app .
+```
+
+```bash
+docker run --rm -p 8080:8080 finance_app
+```
 
 ### Running the tests without installing anything
 
@@ -151,42 +160,64 @@ different host port.
 make docker-test
 ```
 
-That runs `go vet` and the Go suite in the backend's `test` stage, and the
-frontend's `tsc --noEmit` as part of its build stage. It is the quickest way to
-find out whether this scaffold actually compiles.
+That builds the `test` stage, which runs `go vet` and the full Go suite. The
+frontend's `tsc --noEmit` runs earlier, as part of `npm run build`, so a type
+error fails the build before the tests are reached. This is the quickest way to
+find out whether the scaffold actually compiles.
 
-### How the two images are built
+### How the image is built
 
-**Backend** — `golang:1.22-alpine` compiles a static binary
-(`CGO_ENABLED=0`, `-trimpath`, symbols stripped), which is copied into
-`gcr.io/distroless/static-debian12:nonroot`. The runtime image has no shell, no
-package manager and no libc, and runs as a non-root user. Because there is no
-shell or `curl` to health-check with, the binary probes itself:
+Three stages, and the toolchains never reach the runtime layer:
 
-```bash
-docker run --rm finance-app-backend -version
-```
+1. `node:20-alpine` runs `npm run build` — that is `tsc --noEmit && vite build`,
+   so a type error fails the image rather than shipping a broken bundle.
+2. `golang:1.22-alpine` copies that bundle into `internal/web/dist` and compiles
+   a static binary (`CGO_ENABLED=0`, `-trimpath`, symbols stripped).
+3. `gcr.io/distroless/static-debian12:nonroot` receives the binary and nothing
+   else. No shell, no package manager, no libc, and it runs as a non-root user.
 
-**Frontend** — `node:20-alpine` runs `npm run build`, which is
-`tsc --noEmit && vite build`, so a type error fails the image build rather than
-shipping a broken bundle. The resulting `dist/` is served by `nginx:1.27-alpine`.
+The final image is a single executable, which is why `make docker-run` can add
+`--read-only --cap-drop ALL --security-opt no-new-privileges` without anything
+breaking: the process writes nothing and needs no capabilities.
 
-### Networking
+Because there is no shell or `curl` to health-check with, the binary probes
+itself — `HEALTHCHECK` runs `/server -health`, which requests its own health
+endpoint and exits 0 or 1.
 
-The browser only ever talks to the frontend container. nginx serves the bundle
-and proxies `/api` to `backend:8080` over Compose's internal network, which
-means requests are same-origin and **CORS never applies in the Docker setup**.
-The backend publishes no host port; uncomment the `ports:` line under `backend`
-in `docker-compose.yml` if you want to reach the API directly.
+### How one binary serves both
 
-The frontend waits on the backend's health check before it starts, so the first
-page load cannot hit a proxy error.
+`internal/web` embeds `dist/` with `//go:embed` and serves it on every path the
+API does not claim:
+
+- `/api/v1/...` — the API.
+- Anything else under `/api/` — a JSON 404. An unknown endpoint is a client bug,
+  and handing it the HTML shell would make a broken call look like a successful
+  page load.
+- Everything else — the frontend, with unknown paths falling through to
+  `index.html` so a hard refresh on a client-side route returns the app rather
+  than a 404.
+
+Fingerprinted files under `assets/` are served `immutable` with a one-year
+lifetime; `index.html` is always `no-cache`, because a stale shell points the
+browser at asset URLs that no longer exist after a deploy.
+
+`internal/web/dist/` holds a **committed placeholder page**, which exists so that
+`go build` works in a bare checkout — `//go:embed` is resolved at compile time
+and fails outright if the directory is missing. The Docker build replaces it with
+the real bundle. A binary built locally without that step serves the placeholder,
+which says so and points you at the dev server.
+
+### CORS
+
+In the container there is a single origin, so CORS never applies. It matters only
+for local development, where Vite serves on `:5173` and the API on `:8080` —
+and even then the dev server proxies `/api`, keeping requests same-origin.
 
 ### A note on the data
 
-The store is in memory and the containers have no volumes, so **everything is
-lost when the stack stops**. That is not an oversight to fix with a volume — it
-needs a real database behind `store.Store`. See [Known gaps](#known-gaps).
+The store is in memory and the container has no volumes, so **everything is lost
+when it stops**. That is not an oversight to fix with a volume; it needs a real
+database behind `store.Store`. See [Known gaps](#known-gaps).
 
 ## Configuration
 
@@ -204,9 +235,9 @@ personal financial data.
 Frontend: copy `frontend/.env.example` to `frontend/.env` to point the dev proxy
 somewhere other than `localhost:8080`.
 
-Docker Compose: copy `.env.example` to `.env` in the repo root. It reads
-`WEB_PORT` (host port, default 8080), `LOG_LEVEL`, and `VERSION` (stamped into
-the binary and reported by `-version`).
+Docker: pass `VERSION` as a build argument to stamp it into the binary, where
+`/server -version` reports it. The Makefile exposes `IMAGE`, `VERSION` and
+`PORT`.
 
 ## Testing
 

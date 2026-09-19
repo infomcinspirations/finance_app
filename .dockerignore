@@ -1,0 +1,25 @@
+# The build context is the repo root; keep it to what the image actually needs.
+.git/
+.github/
+scripts/
+Makefile
+README.md
+LICENSE
+Dockerfile
+.dockerignore
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Go
+backend/bin/
+*.test
+*.out
+coverage.out
+
+# Never let a local secret into a layer.
+.env
+.env.*
+!.env.example

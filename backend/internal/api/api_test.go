@@ -11,9 +11,11 @@ import (
 	"github.com/infomcinspirations/finance_app/backend/internal/store"
 )
 
+// newServer builds the handler with no frontend, so unmatched paths return the
+// JSON 404 these tests assert on. Static serving is covered separately.
 func newServer(t *testing.T) http.Handler {
 	t.Helper()
-	return New(store.NewMemory(), []string{"http://localhost:5173"})
+	return New(store.NewMemory(), []string{"http://localhost:5173"}, nil)
 }
 
 // do issues a request and decodes the JSON body into out when out is non-nil.
@@ -321,5 +323,66 @@ func TestRequestBodyIsSizeLimited(t *testing.T) {
 	rec := do(t, newServer(t), http.MethodPost, "/api/v1/accounts", huge, nil)
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("got %d, want 400 for an oversized body", rec.Code)
+	}
+}
+
+// --- static serving ----------------------------------------------------------
+
+// stubStatic stands in for the embedded frontend so these tests do not depend on
+// a real build having happened.
+func stubStatic() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte("<html>app shell</html>"))
+	})
+}
+
+// With a frontend mounted, non-API paths must reach it, including client-side
+// routes that only exist in the browser.
+func TestStaticHandlerServesNonAPIPaths(t *testing.T) {
+	h := New(store.NewMemory(), nil, stubStatic())
+
+	for _, path := range []string{"/", "/accounts", "/whatever/deep"} {
+		t.Run(path, func(t *testing.T) {
+			rec := do(t, h, http.MethodGet, path, "", nil)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("got %d, want 200", rec.Code)
+			}
+			if !strings.Contains(rec.Body.String(), "app shell") {
+				t.Errorf("expected the frontend, got %q", rec.Body.String())
+			}
+		})
+	}
+}
+
+// An unknown endpoint under /api/ is a client bug and must stay JSON. Handing it
+// the HTML shell would make a broken API call look like a successful page load.
+func TestUnknownAPIPathStaysJSONEvenWithFrontend(t *testing.T) {
+	h := New(store.NewMemory(), nil, stubStatic())
+
+	var body errorBody
+	rec := do(t, h, http.MethodGet, "/api/v1/nope", "", &body)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("got %d, want 404", rec.Code)
+	}
+	if body.Error == "" {
+		t.Error("expected a JSON error message")
+	}
+	if strings.Contains(rec.Body.String(), "app shell") {
+		t.Error("an unknown API path was served the frontend")
+	}
+}
+
+// Real API routes must not be shadowed by the catch-all.
+func TestAPIRoutesStillWorkWithFrontendMounted(t *testing.T) {
+	h := New(store.NewMemory(), nil, stubStatic())
+
+	rec := do(t, h, http.MethodGet, "/api/v1/health", "", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("health: got %d, want 200", rec.Code)
+	}
+	if strings.Contains(rec.Body.String(), "app shell") {
+		t.Error("the health endpoint was shadowed by the frontend handler")
 	}
 }
