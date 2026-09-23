@@ -22,6 +22,7 @@ frontend/                Vite + React + TypeScript
   src/money.ts           cents parsing and formatting
   src/components/        forms, lists, summary panel
 Dockerfile               builds both halves into one static binary
+docs/DESIGN.md           feature gap analysis and the design that closes it
 ```
 
 ## Quick start
@@ -255,15 +256,21 @@ The store is **in memory** — everything is lost when the server restarts. That
 is deliberate for a scaffold: `store.Store` is a small interface, so a SQL
 implementation drops in beside `store.Memory` without touching a handler.
 
-Also not built yet:
+Also missing, in rough order of how much else depends on it:
 
-- Persistence (Postgres or SQLite behind `store.Store`)
-- Authentication — the API is currently wide open to anyone who can reach it
-- Updating records; only create, read and delete exist
-- Transfers between accounts as a first-class object, rather than two
-  transactions
-- Budgets, recurring transactions, and CSV or OFX import
-- Pagination on the transaction list
+- Persistence, authentication, and an owner column on every row
+- **Updates** — there is no PATCH or PUT, so fixing a typo means delete and
+  re-create
+- **Transfers** — moving money between accounts is two unlinked transactions,
+  and both count as spending
+- Structured categories and payees; they are free-text strings today
+- Pagination, search, and data export
+- Budgets, rules, recurring transactions, import, reconciliation
+
+[docs/DESIGN.md](docs/DESIGN.md) compares all of this against Actual Budget,
+Firefly III, YNAB, Monarch and Copilot, and designs the way through — including
+the four decisions that are expensive to reverse once there is data worth
+keeping.
 
 ## Pushing to GitHub
 
